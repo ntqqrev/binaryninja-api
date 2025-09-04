@@ -40,6 +40,26 @@ void BinaryNinja::InitElfViewType()
 		"description" : "Enable ARM BE8 binary detection for mixed little/big endianness for code/data",
 		"ignore" : ["SettingsProjectScope", "SettingsResourceScope"]
 		})");
+
+	settings->RegisterSetting("files.elf.overrideX86Endianness",
+		R"({
+		"title" : "Override x86 ELF endianness",
+		"type" : "boolean",
+		"default" : true,
+		"description" : "Automatically override endianness to little-endian for x86/x86_64 ELF files (useful for obfuscated binaries)",
+		"ignore" : ["SettingsProjectScope", "SettingsResourceScope"]
+		})");
+
+	settings->RegisterSetting("loader.elf.endianness",
+		R"({
+		"title" : "ELF Endianness Override",
+		"type" : "string",
+		"enum" : ["default", "little", "big"],
+		"enumDescriptions" : ["Use header specified endianness", "Force little-endian", "Force big-endian"],
+		"default" : "default", 
+		"description" : "Override ELF file endianness (useful for manually handling obfuscated files)",
+		"ignore" : ["SettingsProjectScope"]
+		})");
 }
 
 
@@ -56,6 +76,23 @@ ElfView::ElfView(BinaryView* data, bool parseOnly): BinaryView("ELF", data->GetF
 	m_elf32 = m_ident.fileClass == 1;
 	m_addressSize = (m_ident.fileClass == 1 || (m_plat && m_plat->GetName() == "linux-32")) ? 4 : 8;
 	m_endian = endian;
+
+	// Check for manual endianness override via loader settings
+	Ref<Settings> settings = GetLoadSettings(GetTypeName());
+	if (settings && settings->Contains("loader.elf.endianness"))
+	{
+		string endiannessOverride = settings->Get<string>("loader.elf.endianness", this);
+		if (endiannessOverride == "little")
+		{
+			m_endian = LittleEndian;
+			m_logger->LogInfo("Endianness manually overridden to little-endian");
+		}
+		else if (endiannessOverride == "big")
+		{
+			m_endian = BigEndian;
+			m_logger->LogInfo("Endianness manually overridden to big-endian");
+		}
+	}
 	m_relocatable = m_commonHeader.type == ET_DYN || m_commonHeader.type == ET_REL;
 	m_objectFile = m_commonHeader.type == ET_REL;
 	m_backedByDatabase = data->GetFile()->IsBackedByDatabase("ELF");
@@ -3017,6 +3054,11 @@ uint64_t ElfViewType::ParseHeaders(BinaryView* data, ElfIdent& ident, ElfCommonH
 	if (checkForARMBE8)
 		endianness = ((commonHeader.arch == EM_ARM) && (header.flags & EF_ARM_BE8)) ? BigEndian : endianness;
 
+	// Override endianness for x86/x86_64 architectures to little-endian (useful for obfuscated binaries)
+	bool overrideX86Endianness = Settings::Instance()->Get<bool>("files.elf.overrideX86Endianness");
+	if (overrideX86Endianness && (commonHeader.arch == EM_386 || commonHeader.arch == EM_X86_64))
+		endianness = LittleEndian;
+
 	/* for architectures where .e_machine field doesn't disambiguate between 32/64 (like MIPS),
 	   form the conventional alternative id, including the .e_ident[EI_CLASS] field */
 	uint32_t altArchId = (ident.fileClass << 16) | commonHeader.arch;
@@ -3040,6 +3082,10 @@ uint64_t ElfViewType::ParseHeaders(BinaryView* data, ElfIdent& ident, ElfCommonH
 	{
 		BNEndianness codeEndianness = endianness;
 		if (checkForARMBE8 && (commonHeader.arch == EM_ARM) && (header.flags & EF_ARM_BE8))
+			codeEndianness = LittleEndian;
+
+		// Override code endianness for x86/x86_64 architectures to little-endian
+		if (overrideX86Endianness && (commonHeader.arch == EM_386 || commonHeader.arch == EM_X86_64))
 			codeEndianness = LittleEndian;
 
 		if (arch)
@@ -3070,7 +3116,7 @@ Ref<Settings> ElfViewType::GetLoadSettingsForData(BinaryView* data)
 	Ref<Settings> settings = GetDefaultLoadSettingsForData(viewRef);
 
 	// specify default load settings that can be overridden
-	vector<string> overrides = {"loader.imageBase", "loader.platform"};
+	vector<string> overrides = {"loader.imageBase", "loader.platform", "loader.elf.endianness"};
 	if (!viewRef->IsRelocatable())
 		settings->UpdateProperty("loader.imageBase", "message", "Note: File indicates image is not relocatable.");
 
