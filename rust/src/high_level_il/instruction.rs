@@ -1074,14 +1074,16 @@ unsafe impl CoreArrayProviderInner for HighLevelILInstruction {
 }
 
 impl Debug for HighLevelILInstruction {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         // TODO: Actual debug impl please!
-        write!(
-            f,
-            "<{} at 0x{:08}>",
-            core::any::type_name::<Self>(),
-            self.address,
-        )
+        f.debug_struct("HighLevelILInstruction")
+            .field("name", &core::any::type_name::<Self>())
+            .field("address", &format_args!("0x{:08X}", self.address))
+            .field("instr_index", &self.instr_index)
+            .field("expr_index", &self.expr_index)
+            .field("size", &self.size)
+            .field("kind", &self.kind)
+            .finish()
     }
 }
 

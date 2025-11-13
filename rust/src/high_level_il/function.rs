@@ -133,6 +133,21 @@ impl HighLevelILFunction {
         unsafe { BNHighLevelILSetCurrentAddress(self.handle, arch, location.addr) }
     }
 
+    pub fn basic_block_containing(
+        &self,
+        instruction_index: HighLevelInstructionIndex,
+    ) -> Option<BasicBlock<HighLevelILBlock>> {
+        let block = unsafe { BNGetHighLevelILBasicBlockForInstruction(self.handle, instruction_index.0) };
+        (!block.is_null()).then(|| unsafe {
+            BasicBlock::from_raw(
+                block,
+                HighLevelILBlock {
+                    function: self.to_owned(),
+                },
+            )
+        })
+    }
+
     /// Gets the instruction that contains the given SSA variable's definition.
     ///
     /// Since SSA variables can only be defined once, this will return the single instruction where that occurs.
