@@ -16,15 +16,7 @@ use crate::binary_view::BinaryView;
 use crate::database::Database;
 use crate::rc::*;
 use crate::string::*;
-use binaryninjacore_sys::{
-    BNBeginUndoActions, BNCloseFile, BNCommitUndoActions, BNCreateDatabase, BNCreateFileMetadata,
-    BNFileMetadata, BNFileMetadataGetSessionId, BNForgetUndoActions, BNFreeFileMetadata,
-    BNGetCurrentOffset, BNGetCurrentView, BNGetExistingViews, BNGetFileMetadataDatabase,
-    BNGetFileViewOfType, BNGetFilename, BNGetProjectFile, BNIsAnalysisChanged,
-    BNIsBackedByDatabase, BNIsFileModified, BNMarkFileModified, BNMarkFileSaved, BNNavigate,
-    BNNewFileReference, BNOpenDatabaseForConfiguration, BNOpenExistingDatabase, BNRedo,
-    BNRevertUndoActions, BNSaveAutoSnapshot, BNSetFilename, BNUndo,
-};
+use binaryninjacore_sys::{BNBeginUndoActions, BNCloseFile, BNCommitUndoActions, BNCreateDatabase, BNCreateFileMetadata, BNFileMetadata, BNFileMetadataGetSessionId, BNForgetUndoActions, BNFreeFileMetadata, BNGetCurrentOffset, BNGetCurrentView, BNGetExistingViews, BNGetFileMetadataDatabase, BNGetFileViewOfType, BNGetFilename, BNGetOriginalFilename, BNGetProjectFile, BNIsAnalysisChanged, BNIsBackedByDatabase, BNIsFileModified, BNMarkFileModified, BNMarkFileSaved, BNNavigate, BNNewFileReference, BNOpenDatabaseForConfiguration, BNOpenExistingDatabase, BNRedo, BNRevertUndoActions, BNSaveAutoSnapshot, BNSetFilename, BNUndo};
 use binaryninjacore_sys::{BNCreateDatabaseWithProgress, BNOpenExistingDatabaseWithProgress};
 use std::ffi::c_void;
 use std::fmt::Debug;
@@ -66,6 +58,21 @@ impl FileMetadata {
 
     pub fn session_id(&self) -> usize {
         unsafe { BNFileMetadataGetSessionId(self.handle) }
+    }
+
+    pub fn original_filename(&self) -> String {
+        unsafe {
+            let raw = BNGetOriginalFilename(self.handle);
+            BnString::into_string(raw)
+        }
+    }
+
+    pub fn set_original_filename(&self, name: &str) {
+        let name = name.to_cstr();
+
+        unsafe {
+            BNSetFilename(self.handle, name.as_ptr());
+        }
     }
 
     pub fn filename(&self) -> String {
